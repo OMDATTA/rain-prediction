@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Unit tests (pure-Python inference, no ML deps needed)
+        run: pytest -q
+      - name: Smoke-test the API handlers
+        run: |
+          python dev_server.py 8000 &
+          sleep 2
+          curl -sf localhost:8000/api/health
+          curl -sf -X POST localhost:8000/api/predict -H 'Content-Type: application/json' -d '{"Humidity3pm":90,"Cloud3pm":8}'

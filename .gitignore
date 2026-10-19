@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.vercel
+.ipynb_checkpoints/
+data/*.csv
+!data/sample_weather.csv
+kaggle.json
+.DS_Store
+.pytest_cache/

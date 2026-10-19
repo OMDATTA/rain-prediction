@@ -1,0 +1,12 @@
+[project]
+name = "raincast"
+version = "1.0.0"
+description = "Rain prediction with ML, fuzzy logic, a genetic algorithm, live weather and IoT, deployable on Vercel"
+requires-python = ">=3.12"
+# Runtime has zero dependencies: models are exported to rainlib/model.json and
+# evaluated in pure Python, keeping the Vercel functions tiny with fast cold starts.
+# Training dependencies live in requirements-train.txt.
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

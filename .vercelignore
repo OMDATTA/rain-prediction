@@ -1,0 +1,11 @@
+data
+notebooks
+src
+iot
+tests
+reports
+docs
+*.md
+requirements-train.txt
+dev_server.py
+.pytest_cache

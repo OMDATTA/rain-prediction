@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" data-theme="storm">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RainCast — Hybrid ML + Fuzzy Rain Prediction</title>
+  <meta name="description" content="Predict rain probability and rain type from live, historical and IoT weather data using machine learning, fuzzy logic and a genetic algorithm." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2368c3ea' d='M12 2.5c3.6 4.6 6.5 8.4 6.5 11.8a6.5 6.5 0 0 1-13 0C5.5 10.9 8.4 7.1 12 2.5z'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>window.__API_BASE__ = window.__API_BASE__ || "";</script>
+</head>
+<body>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="mist" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="RainCast home">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 2.5c3.6 4.6 6.5 8.4 6.5 11.8a6.5 6.5 0 0 1-13 0C5.5 10.9 8.4 7.1 12 2.5z"/><path d="M9 15.2a3 3 0 0 0 3 3" stroke="var(--bg)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+      <span>RainCast</span>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#predict">Predict</a>
+      <a href="#history">History</a>
+      <a href="#iot">IoT</a>
+      <a href="#model">Model</a>
+    </nav>
+    <button class="icon-btn" id="themeToggle" aria-label="Switch to light theme" title="Toggle theme">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section class="intro" id="predict">
+      <p class="eyebrow">Kaggle history · live Open-Meteo data · IoT sensors</p>
+      <h1>Will it rain tomorrow?</h1>
+      <p class="lede">A hybrid of gradient boosting, logistic regression and fuzzy logic, blended by a genetic algorithm. Pick a place, adjust the readings, or send data from a sensor node.</p>
+    </section>
+
+    <section class="grid-main">
+      <!-- INPUT PANEL -->
+      <div class="panel inputs">
+        <div class="tabs" role="tablist" aria-label="Input mode">
+          <button role="tab" aria-selected="true" data-tab="live" class="tab active">Live location</button>
+          <button role="tab" aria-selected="false" data-tab="manual" class="tab">Manual inputs</button>
+          <button role="tab" aria-selected="false" data-tab="iot" class="tab">IoT reading</button>
+        </div>
+
+        <div class="tabpanel" data-panel="live">
+          <form id="searchForm" class="search" autocomplete="off">
+            <label class="sr-only" for="city">City</label>
+            <input id="city" name="city" type="search" placeholder="Search a city — e.g. Mumbai, Kolkata, Sydney" />
+            <button class="btn primary" type="submit">Search</button>
+          </form>
+          <ul id="results" class="results" role="listbox" aria-label="Matching places"></ul>
+          <div class="row-actions">
+            <button class="btn ghost" id="geoBtn" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+              Use my location
+            </button>
+            <span id="placeLabel" class="muted"></span>
+          </div>
+          <div id="nowGrid" class="now-grid" aria-label="Current conditions"></div>
+          <p class="hint">Live readings fill in the manual form, so you can tweak any value and predict again.</p>
+        </div>
+
+        <div class="tabpanel" data-panel="manual" hidden>
+          <form id="manualForm" class="fields"></form>
+          <div class="row-actions">
+            <button class="btn primary" id="predictBtn" type="button">Predict rain</button>
+            <button class="btn ghost" id="presetDry" type="button">Dry preset</button>
+            <button class="btn ghost" id="presetMonsoon" type="button">Monsoon preset</button>
+          </div>
+        </div>
+
+        <div class="tabpanel" data-panel="iot" hidden>
+          <label class="field-label block" for="iotPayload">Sensor payload (JSON) — what an ESP32 node sends to <code>/api/iot</code></label>
+          <textarea id="iotPayload" spellcheck="false" rows="11"></textarea>
+          <div class="row-actions">
+            <button class="btn primary" id="iotSend" type="button">Send as device</button>
+            <button class="btn ghost" id="iotRandom" type="button">Simulate reading</button>
+          </div>
+          <div id="iotResult" class="iot-result" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <!-- RESULT PANEL -->
+      <div class="panel result" aria-live="polite">
+        <div class="result-top">
+          <div class="gauge" id="gauge" role="img" aria-label="Rain probability">
+            <svg viewBox="0 0 200 200" class="gauge-svg" aria-hidden="true">
+              <defs>
+                <clipPath id="dropClip"><path d="M100 14c30 38 58 72 58 104a58 58 0 0 1-116 0c0-32 28-66 58-104z"/></clipPath>
+                <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="var(--water-1)"/><stop offset="1" stop-color="var(--water-2)"/>
+                </linearGradient>
+              </defs>
+              <path d="M100 14c30 38 58 72 58 104a58 58 0 0 1-116 0c0-32 28-66 58-104z" class="drop-shell"/>
+              <g clip-path="url(#dropClip)">
+                <g id="waterGroup" style="transform: translateY(176px)">
+                  <path class="wave w1" d="M-200 10 Q-175 0 -150 10 T-100 10 T-50 10 T0 10 T50 10 T100 10 T150 10 T200 10 T250 10 T300 10 T350 10 T400 10 V300 H-200 Z" fill="url(#water)"/>
+                  <path class="wave w2" d="M-200 14 Q-170 4 -140 14 T-80 14 T-20 14 T40 14 T100 14 T160 14 T220 14 T280 14 T340 14 T400 14 V300 H-200 Z" fill="url(#water)" opacity=".55"/>
+                </g>
+              </g>
+            </svg>
+            <div class="gauge-label"><span id="probValue">--</span><small>%</small></div>
+          </div>
+          <div class="verdict">
+            <p class="eyebrow" id="verdictPlace">Awaiting input</p>
+            <h2 id="verdictTitle">Choose a place or enter readings</h2>
+            <p id="verdictSub" class="muted">The probability fills the drop; the rain behind this page follows it.</p>
+            <div class="chips" id="chips"></div>
+          </div>
+        </div>
+
+        <div class="split">
+          <div>
+            <h3>Model blend</h3>
+            <div id="components" class="bars"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+          </div>
+          <div>
+            <h3>Rain type (fuzzy memberships)</h3>
+            <div id="memberships" class="bars"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+          </div>
+        </div>
+        <details class="rules">
+          <summary>Fuzzy rules that fired</summary>
+          <ul id="rules"></ul>
+        </details>
+      </div>
+    </section>
+
+    <section class="section" id="history">
+      <div class="section-head">
+        <h2>Current and historical context</h2>
+        <p class="muted">Past 7 days observed, the next 24 hours from the Open-Meteo forecast for comparison, and 10 years of local climatology.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel chart-card"><h3>Last 7 days</h3><div class="chart-wrap"><canvas id="histChart"></canvas></div></div>
+        <div class="panel chart-card"><h3>Next 24 h (reference forecast)</h3><div class="chart-wrap"><canvas id="nextChart"></canvas></div></div>
+        <div class="panel chart-card"><h3>Rainy-day frequency by month</h3><div class="chart-wrap"><canvas id="climChart"></canvas></div></div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </section>
+
+    <section class="section" id="iot">
+      <div class="section-head">
+        <h2>IoT sensor node</h2>
+        <p class="muted">An ESP32 with a BME280 (temperature, humidity, pressure) and an FC-37 rain plate posts readings every 10 minutes and lights an LED based on the reply.</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Wiring</h3>
+          <svg viewBox="0 0 420 210" class="wiring" role="img" aria-label="ESP32 wiring diagram with BME280 on I2C pins 21 and 22, rain sensor on GPIO 34, and RGB LED on GPIO 25, 26 and 27">
+            <rect x="150" y="40" width="120" height="130" rx="10" class="chip"/>
+            <text x="210" y="100" text-anchor="middle" class="chip-t">ESP32</text>
+            <text x="210" y="118" text-anchor="middle" class="pin-t">Wi-Fi · HTTPS</text>
+            <rect x="12" y="30" width="96" height="56" rx="8" class="mod"/><text x="60" y="55" text-anchor="middle" class="mod-t">BME280</text><text x="60" y="72" text-anchor="middle" class="pin-t">SDA 21 · SCL 22</text>
+            <rect x="12" y="122" width="96" height="56" rx="8" class="mod"/><text x="60" y="147" text-anchor="middle" class="mod-t">FC-37 rain</text><text x="60" y="164" text-anchor="middle" class="pin-t">AO → GPIO 34</text>
+            <rect x="312" y="30" width="96" height="56" rx="8" class="mod"/><text x="360" y="55" text-anchor="middle" class="mod-t">RGB LED</text><text x="360" y="72" text-anchor="middle" class="pin-t">25 · 26 · 27</text>
+            <rect x="312" y="122" width="96" height="56" rx="8" class="mod"/><text x="360" y="147" text-anchor="middle" class="mod-t">Buzzer</text><text x="360" y="164" text-anchor="middle" class="pin-t">GPIO 14</text>
+            <path d="M108 58 H150 M108 150 H150 M270 58 H312 M270 150 H312" class="wire"/>
+          </svg>
+        </div>
+        <div class="panel">
+          <h3>Try it from a terminal</h3>
+          <pre class="code"><code id="curlSnippet"></code></pre>
+          <p class="muted small">Firmware: <code>iot/esp32_rain_node/</code> (Arduino) and <code>iot/micropython/</code>. No hardware? Run <code>python iot/simulator.py</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="model">
+      <div class="section-head">
+        <h2>Model card</h2>
+        <p class="muted" id="modelMeta">Loading model metadata…</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Pipeline</h3>
+          <ol class="pipeline">
+            <li><b>Data science</b>: 145k daily observations from the Kaggle weatherAUS dataset; median imputation; engineered humidity and pressure deltas, temperature range and wind direction as sin/cos.</li>
+            <li><b>Machine learning</b>: logistic regression, random forest, gradient boosting and an MLP neural network, compared on a chronological split (train to 2014, validate 2015, test 2016–17).</li>
+            <li><b>Soft computing</b>: a Mamdani fuzzy system with 18 expert rules, a fuzzy IMD rain-type classifier, and a genetic algorithm that evolves the blend weights and decision threshold for best F1.</li>
+            <li><b>Live and historical data</b>: Open-Meteo current conditions, past 7 days and 10-year climatology, which acts as a Bayesian prior.</li>
+            <li><b>IoT</b>: ESP32 sensor readings go to the same engine; any missing values are imputed.</li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h3>Ensemble on held-out test set</h3>
+          <div id="metrics" class="metrics"><div class="skeleton"></div><div class="skeleton"></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>RainCast · weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · historical data from the <a href="https://www.kaggle.com/datasets/jsphyg/weather-dataset-rattle-package" target="_blank" rel="noopener">Kaggle Rain in Australia dataset</a>. For learning purposes only; not an official forecast.</p>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
